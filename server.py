@@ -24,7 +24,6 @@ def handle_client(client_socket: socket.socket, address):
 
         # Store the active connection
         active_connections[address] = (name, client_socket)
-        print(f"> connections ({len(active_connections)}):", active_connections)
 
         while not exit_event:
             message = client_socket.recv(1024).decode('utf-8')
@@ -37,6 +36,12 @@ def handle_client(client_socket: socket.socket, address):
             if message.lower() == 'exit':
                 print(f"{name} at {address} requested to close connection.")
                 break
+            elif message.lower() == 'list':
+                print(f"\nActive connections ({len(active_connections)}):")
+                count = 0
+                for addr, (name, _) in active_connections.items():
+                    count += 1
+                    print(f"{count}. {name} {addr}")
 
     except ConnectionResetError:
         print(f"Connection with {name} at {address} reset by the client.")
