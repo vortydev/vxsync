@@ -4,17 +4,48 @@
 import socket
 import threading
 import select
+import time
 
 # ENV
 SERVER_IP = "localhost"
 SERVER_PORT = 5555
 MAX_CONNECTIONS = 5
 
+
 # Event to signal threads to terminate
 exit_event = False
 
 # Dictionary to store active connections and their names
 active_connections: dict[any, tuple[str, socket.socket]] = {}
+
+# Create a lock for thread safety
+active_connections_lock = threading.Lock()
+
+
+def process_client_message(name: str, address, message: str, client_socket: socket.socket):
+    """
+    Process messages received from a client.
+    """
+    global active_connections
+
+    if message.lower() == 'exit':
+        print(f"{name} at {address} requested to close connection.")
+        return True  # Signal to close the connection
+    
+    elif message.lower() == 'ping':
+        client_socket.send('pong'.encode('utf-8'))
+        print(f"Responded to {name}'s ping at {address}.")
+        return False
+
+    elif message.lower() == 'list':
+        print(f"\nActive connections ({len(active_connections)}):")
+        count = 0
+        for addr, (name, _) in active_connections.items():
+            count += 1
+            print(f"{count}. {name} {addr}")
+    
+    return False
+
 
 def handle_client(client_socket: socket.socket, address):
     try:
@@ -27,21 +58,14 @@ def handle_client(client_socket: socket.socket, address):
 
         while not exit_event:
             message = client_socket.recv(1024).decode('utf-8')
-            if not message:
-                print(f"Connection with {name} at {address} closed.")
-                break
-            print(f"Received message from {name} at {address}: {message}")
+            with active_connections_lock:
+                if not message:
+                    print(f"Connection with {name} at {address} closed.")
+                    break
+                print(f"Received message from {name} at {address}: {message}")
 
-            # Check for the "exit" command
-            if message.lower() == 'exit':
-                print(f"{name} at {address} requested to close connection.")
-                break
-            elif message.lower() == 'list':
-                print(f"\nActive connections ({len(active_connections)}):")
-                count = 0
-                for addr, (name, _) in active_connections.items():
-                    count += 1
-                    print(f"{count}. {name} {addr}")
+                if process_client_message(name, address, message, client_socket):
+                    break
 
     except ConnectionResetError:
         print(f"Connection with {name} at {address} reset by the client.")
@@ -50,9 +74,11 @@ def handle_client(client_socket: socket.socket, address):
             print(f"Error handling client {name} at {address}: {e}")
 
     finally:
-        # Remove the connection from the active list
-        del active_connections[address]
+        with active_connections_lock:
+            # Remove the connection from the active list
+            del active_connections[address]
         client_socket.close()
+
 
 def main():
     global exit_event

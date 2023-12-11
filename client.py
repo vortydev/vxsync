@@ -3,10 +3,13 @@
 # Packages
 import socket
 import threading
+import time
 
 # ENV
 SERVER_IP = "localhost"
 SERVER_PORT = 5555
+
+start_time = 0
 
 def receive_messages(client_socket: socket.socket):
     """Receive messages on a connected socket. """
@@ -16,13 +19,15 @@ def receive_messages(client_socket: socket.socket):
             if not message:
                 print("Connection closed by the server.")
                 break
-            print(f"Server: {message}")
+            # print(f"Server: {message}")
 
             # Check for the "exit" command
             if message.lower() == 'exit':
                 print("Server requested to close connection.")
                 client_socket.close()
                 break
+            elif message.lower() == 'pong':
+                print(f"pong ({time.time() - start_time:.6f} seconds)")
 
     except ConnectionResetError:
         print("Connection reset by the server.")
@@ -30,6 +35,7 @@ def receive_messages(client_socket: socket.socket):
         print(f"Error receiving message from the server: {e}")
     finally:
         client_socket.close()
+
 
 def main():
     # Set up the client
@@ -44,13 +50,17 @@ def main():
     receive_thread = threading.Thread(target=receive_messages, args=(client,))
     receive_thread.start()
 
+    global start_time
+
     try:
         while True:
             message = input("Enter a message (type 'exit' to close connection): ")
+            # message = "ping"
+            # time.sleep(2)
             client.send(message.encode('utf-8'))
-            if message.lower() == 'exit':
-                receive_thread.join()
-                client.close()
+            if message.lower() == 'ping':
+                start_time = time.time()
+            elif message.lower() == 'exit':
                 break
 
     except KeyboardInterrupt:
@@ -67,6 +77,8 @@ def main():
             client.close()
 
     finally:
+        receive_thread.join()
+        client.close()
         exit(0)
             
 
